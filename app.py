@@ -21,7 +21,6 @@ def extrair_tcpos(file):
                 linhas = texto.split("\n")
 
                 for linha in linhas:
-                    # valor no formato 17,00
                     valor_match = re.search(r'(\d+,\d{2})', linha)
                     partes = linha.split()
 
@@ -36,7 +35,7 @@ def extrair_tcpos(file):
 
 
 # ==============================
-# OPERA
+# OPERA (VERSÃO CORRETA)
 # ==============================
 
 def extrair_opera(file):
@@ -49,26 +48,26 @@ def extrair_opera(file):
             if texto:
                 linhas = texto.split("\n")
 
-                valor_temp = None
+                for i in range(1, len(linhas)):
 
-                for linha in linhas:
+                    linha_atual = linhas[i]
+                    linha_anterior = linhas[i-1]
 
-                    # Linha com valor (BRL 8.00 0.00 ...)
-                    if "BRL" in linha:
-                        numeros = re.findall(r'\d+\.\d{2}', linha)
-                        if numeros:
-                            valor_temp = float(numeros[0])
+                    # Só considera NF da linha CHECK#
+                    if "CHECK#" in linha_atual:
 
-                    # Linha seguinte com NF correto
-                    nf_match = re.search(r'NF:(\d+)', linha)
+                        nf_match = re.search(r'NF:(\d+)', linha_atual)
 
-                    if nf_match and valor_temp is not None:
-                        nf = nf_match.group(1)
+                        if nf_match:
+                            nf = nf_match.group(1)
 
-                        dados[nf] += valor_temp
-                        duplicidade[nf] += 1
+                            # Pega valor da linha anterior (onde tem BRL)
+                            numeros = re.findall(r'\d+\.\d{2}', linha_anterior)
 
-                        valor_temp = None  # limpa para próxima venda
+                            if numeros:
+                                valor = float(numeros[0])
+                                dados[nf] += valor
+                                duplicidade[nf] += 1
 
     return dados, duplicidade
 
@@ -97,7 +96,7 @@ if tcpos_file and opera_file:
         elif diferenca != 0:
             status = "⚠️ Valor divergente"
         elif duplicidade[cupom] > 1:
-            status = "🔁 Split no Opera (soma considerada)"
+            status = "🔁 Split no Opera"
         else:
             status = "✅ OK"
 
@@ -117,7 +116,6 @@ if tcpos_file and opera_file:
     st.subheader("Detalhamento")
     st.dataframe(df)
 
-    # Excel export
     output = BytesIO()
     df.to_excel(output, index=False)
 
