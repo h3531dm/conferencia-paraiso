@@ -1,4 +1,4 @@
-[17:39, 04/03/2026] Luciano: import streamlit as st
+import streamlit as st
 import pdfplumber
 import re
 import pandas as pd
