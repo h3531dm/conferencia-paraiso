@@ -7,8 +7,6 @@ from io import BytesIO
 
 st.title("🔎 Conferência TCPOS x Opera")
 
-debug = st.checkbox("Modo Debug")
-
 # ==============================
 # TCPOS
 # ==============================
@@ -22,16 +20,14 @@ def extrair_tcpos(file):
             if texto:
                 linhas = texto.split("\n")
 
-                if debug:
-                    st.write("TCPOS linhas:")
-                    st.write(linhas[:40])
-
                 for linha in linhas:
+                    # valor no formato 17,00
                     valor_match = re.search(r'(\d+,\d{2})', linha)
                     partes = linha.split()
 
                     if len(partes) >= 3 and valor_match:
                         cupom = partes[2]
+
                         if cupom.isdigit():
                             valor = float(valor_match.group(1).replace(",", "."))
                             dados[cupom] = valor
@@ -53,47 +49,41 @@ def extrair_opera(file):
             if texto:
                 linhas = texto.split("\n")
 
-                if debug:
-                    st.write("Opera linhas:")
-                    st.write(linhas[:40])
+                valor_temp = None
 
                 for linha in linhas:
+
+                    # Linha com valor (BRL 8.00 0.00 ...)
+                    if "BRL" in linha:
+                        numeros = re.findall(r'\d+\.\d{2}', linha)
+                        if numeros:
+                            valor_temp = float(numeros[0])
+
+                    # Linha seguinte com NF correto
                     nf_match = re.search(r'NF:(\d+)', linha)
 
-                    if nf_match:
+                    if nf_match and valor_temp is not None:
                         nf = nf_match.group(1)
-                        numeros = re.findall(r'\d+\.\d{2}', linha)
 
-                        if numeros:
-                            valor = float(numeros[-1])
-                            dados[nf] += valor
-                            duplicidade[nf] += 1
+                        dados[nf] += valor_temp
+                        duplicidade[nf] += 1
+
+                        valor_temp = None  # limpa para próxima venda
 
     return dados, duplicidade
 
 
 # ==============================
-# UPLOADS
+# INTERFACE
 # ==============================
 
 tcpos_file = st.file_uploader("Upload Relatório TCPOS", type="pdf")
 opera_file = st.file_uploader("Upload Relatório Opera", type="pdf")
 
-tcpos = {}
-opera = {}
-duplicidade = {}
+if tcpos_file and opera_file:
 
-if tcpos_file:
     tcpos = extrair_tcpos(tcpos_file)
-
-if opera_file:
     opera, duplicidade = extrair_opera(opera_file)
-
-# ==============================
-# SE TIVER OS DOIS → CONCILIA
-# ==============================
-
-if tcpos and opera:
 
     resultados = []
 
@@ -107,7 +97,7 @@ if tcpos and opera:
         elif diferenca != 0:
             status = "⚠️ Valor divergente"
         elif duplicidade[cupom] > 1:
-            status = "🔁 Split no Opera"
+            status = "🔁 Split no Opera (soma considerada)"
         else:
             status = "✅ OK"
 
@@ -127,6 +117,7 @@ if tcpos and opera:
     st.subheader("Detalhamento")
     st.dataframe(df)
 
+    # Excel export
     output = BytesIO()
     df.to_excel(output, index=False)
 
