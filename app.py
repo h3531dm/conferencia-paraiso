@@ -7,19 +7,33 @@ from io import BytesIO
 
 st.title("🔎 Conferência TCPOS x Opera")
 
+debug = st.checkbox("Modo Debug")
+
+# ==============================
+# TCPOS
+# ==============================
+
 def extrair_tcpos(file):
     dados = {}
+
     with pdfplumber.open(file) as pdf:
         for page in pdf.pages:
             texto = page.extract_text()
             if texto:
                 linhas = texto.split("\n")
+
+                if debug:
+                    st.write("TCPOS linhas:")
+                    st.write(linhas[:40])
+
                 for linha in linhas:
-                    # procura padrão de valor R$ XX,XX
-                    valor_match = re.search(r'R\$\s?(\d+,\d+)', linha)
+
+                    # procura valor no formato 17,00
+                    valor_match = re.search(r'(\d+,\d{2})', linha)
                     partes = linha.split()
 
-                    if len(partes) >= 5 and valor_match:
+                    if len(partes) >= 3 and valor_match:
+
                         cupom = partes[2]
 
                         if cupom.isdigit():
@@ -28,6 +42,10 @@ def extrair_tcpos(file):
 
     return dados
 
+
+# ==============================
+# OPERA
+# ==============================
 
 def extrair_opera(file):
     dados = defaultdict(float)
@@ -38,27 +56,33 @@ def extrair_opera(file):
             texto = page.extract_text()
             if texto:
                 linhas = texto.split("\n")
+
+                if debug:
+                    st.write("Opera linhas:")
+                    st.write(linhas[:40])
+
                 for linha in linhas:
+
                     nf_match = re.search(r'NF:(\d+)', linha)
 
                     if nf_match:
                         nf = nf_match.group(1)
 
-                        # captura número decimal da linha (coluna debit)
-                        numeros = re.findall(r'\d+\.\d+|\d+,\d+', linha)
+                        # captura todos números decimais da linha
+                        numeros = re.findall(r'\d+\.\d{2}', linha)
 
                         if numeros:
-                            # assume que o último número decimal da linha é o debit
-                            valor_bruto = numeros[-1].replace(",", ".")
-                            try:
-                                valor = float(valor_bruto)
-                                dados[nf] += valor
-                                duplicidade[nf] += 1
-                            except:
-                                pass
+                            # assume que o último decimal é o valor debit
+                            valor = float(numeros[-1])
+                            dados[nf] += valor
+                            duplicidade[nf] += 1
 
     return dados, duplicidade
 
+
+# ==============================
+# INTERFACE
+# ==============================
 
 tcpos_file = st.file_uploader("Upload Relatório TCPOS", type="pdf")
 opera_file = st.file_uploader("Upload Relatório Opera", type="pdf")
@@ -76,13 +100,13 @@ if tcpos_file and opera_file:
         diferenca = round(valor_tcpos - valor_opera, 2)
 
         if cupom not in opera:
-            status = "Não encontrado no Opera"
+            status = "❌ Não encontrado no Opera"
         elif diferenca != 0:
-            status = "Valor divergente"
+            status = "⚠️ Valor divergente"
         elif duplicidade[cupom] > 1:
-            status = "Duplicidade no Opera"
+            status = "🔁 Split no Opera (ok se soma bater)"
         else:
-            status = "OK"
+            status = "✅ OK"
 
         resultados.append({
             "NF": cupom,
@@ -100,6 +124,7 @@ if tcpos_file and opera_file:
     st.subheader("Detalhamento")
     st.dataframe(df)
 
+    # gerar excel
     output = BytesIO()
     df.to_excel(output, index=False)
 
